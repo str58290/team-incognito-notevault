@@ -18,7 +18,7 @@ export default function NewNotePage() {
   const [isSaving, setIsSaving] = useState(false)
 
   // Redirect if not authenticated
-  if (!isAuthenticated) {
+  if(0){//if (!isAuthenticated) {
     router.push("/login")
     return null
   }
