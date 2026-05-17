@@ -1,10 +1,13 @@
 import { supabase } from "./supabase"
 import type { Note } from "@/types/note"
 
+// supabase.auth.getUser to see their own notes
 export async function getNotes(): Promise<Note[]> {
+  const { data: { user } } = await supabase.auth.getUser()
   const { data, error } = await supabase
     .from("notes")
     .select("*")
+    .eq("user_id", user!.id)
     .order("created_at", { ascending: false })
   if (error) throw error
   return data
