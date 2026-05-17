@@ -28,15 +28,24 @@ export default function SignupPage() {
       return
     }
 
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
+      return
+    }
+
     setIsLoading(true)
 
-    // TODO: Replace with Supabase Auth - supabase.auth.signUp()
     const result = await signup(email, password)
 
     if (result.success) {
       router.push("/dashboard")
     } else {
-      setError(result.error || "An error occurred")
+      // Check if error indicates account already exists
+      if (result.error?.includes("already registered") || result.error?.includes("user already exists")) {
+        setError(`Account already exists. Log in instead!`)
+      } else {
+        setError(result.error || "Signup failed. Please try again.")
+      }
     }
 
     setIsLoading(false)
@@ -123,6 +132,16 @@ export default function SignupPage() {
                 )}
               </Button>
             </form>
+
+            {error?.includes("already registered") && (
+              <Button
+                onClick={() => router.push("/login")}
+                variant="outline"
+                className="w-full mt-4"
+              >
+                Log in instead
+              </Button>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{" "}

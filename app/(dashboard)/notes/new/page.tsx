@@ -16,24 +16,32 @@ export default function NewNotePage() {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState("")
 
   // Redirect if not authenticated
-  if(0){//if (!isAuthenticated) {
+  if (!isAuthenticated) {
     router.push("/login")
     return null
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
 
-    if (!title.trim()) return
+    if (!title.trim()) {
+      setError("Please enter a title")
+      return
+    }
 
     setIsSaving(true)
 
-    // TODO: Replace with Supabase insert - supabase.from('notes').insert()
-    await createNote(title.trim(), content.trim())
-
-    router.push("/dashboard")
+    try {
+      await createNote(title.trim(), content.trim())
+      router.push("/dashboard")
+    } catch (err) {
+      setError("Failed to save note. Please try again.")
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -71,6 +79,12 @@ export default function NewNotePage() {
       {/* Editor */}
       <main className="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="title" className="sr-only">
               Title
