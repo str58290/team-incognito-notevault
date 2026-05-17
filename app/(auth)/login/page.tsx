@@ -30,37 +30,32 @@ export default function LoginPage() {
       return
     }
 
-    // Check if user exists in users table
-    try {
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
+try {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-      if (checkError) {
-        console.error("Error checking user:", checkError)
-      }
-
-      if (!existingUser || existingUser.length === 0) {
-        setError("Account not found. Please create a new account first.")
-        setIsLoading(false)
-        return
-      }
-    } catch (err) {
-      console.error("Error checking user:", err)
-      setError("Error checking account. Please try again.")
-      setIsLoading(false)
-      return
-    }
-
-    // User exists, proceed with login
-    const result = await login(email, password)
-
-    if (result.success) {
-      router.push("/dashboard")
+  if (error) {
+    // Supabase intentionally returns the same error for both
+    // "wrong password" and "account doesn't exist"
+    if (
+      error.message === "Invalid login credentials" ||
+      error.message === "Email not confirmed"
+    ) {
+      setError("Account not found or incorrect password. Please check your credentials or sign up.");
     } else {
-      setError(result.error || "Login failed. Please try again.")
+      setError(error.message || "Login failed. Please try again.");
     }
+    setIsLoading(false);
+    return;
+  }
+
+  // Login successful
+  router.push("/dashboard");
+
+} catch (err) {
+  console.error("Error during login:", err);
+  setError("An unexpected error occurred. Please try again.");
+  setIsLoading(false);
+}
 
     setIsLoading(false)
   }
