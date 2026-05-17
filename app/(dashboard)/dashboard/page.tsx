@@ -10,26 +10,23 @@ import { useNotes } from "@/lib/notes-context"
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, isAuthenticated, logout, notes, isLoading, fetchNotes } = useNotes()
+  const { user, isAuthenticated, authLoading, logout, notes, isLoading, fetchNotes } = useNotes()
 
   useEffect(() => {
-    // Redirect to login if not authenticated
-    if(0){//if (!isAuthenticated) {
+    if (authLoading) return
+    if (!isAuthenticated) {
       router.push("/login")
       return
     }
-
-    // TODO: Replace with Supabase query - will fetch from database
     fetchNotes()
-  }, [isAuthenticated, router, fetchNotes])
+  }, [authLoading, isAuthenticated, router, fetchNotes])
 
-  const handleLogout = () => {
-    // TODO: Replace with Supabase Auth - supabase.auth.signOut()
-    logout()
+  const handleLogout = async () => {
+    await logout()
     router.push("/")
   }
 
-  if(0){// if (!isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />

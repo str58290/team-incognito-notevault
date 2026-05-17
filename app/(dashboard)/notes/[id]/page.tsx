@@ -24,7 +24,7 @@ import { useNotes } from "@/lib/notes-context"
 export default function EditNotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { isAuthenticated, notes, getNote, updateNote, deleteNote, fetchNotes } = useNotes()
+  const { isAuthenticated, authLoading, notes, getNote, updateNote, deleteNote, fetchNotes } = useNotes()
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [isSaving, setIsSaving] = useState(false)
@@ -32,6 +32,10 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
+<<<<<<< Updated upstream
+=======
+    if (authLoading) return
+>>>>>>> Stashed changes
     if (!isAuthenticated) {
       router.push("/login")
       return
@@ -43,7 +47,7 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
     } else {
       setIsLoaded(true)
     }
-  }, [isAuthenticated, router, notes.length, fetchNotes])
+  }, [authLoading, isAuthenticated, router, notes.length, fetchNotes])
 
   useEffect(() => {
     if (isLoaded) {
@@ -59,7 +63,11 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
     }
   }, [isLoaded, id, getNote, router])
 
+<<<<<<< Updated upstream
   if (!isAuthenticated || !isLoaded) {
+=======
+  if (authLoading || !isAuthenticated || !isLoaded) {
+>>>>>>> Stashed changes
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -12,15 +12,31 @@ import { useNotes } from "@/lib/notes-context"
 
 export default function NewNotePage() {
   const router = useRouter()
-  const { isAuthenticated, createNote } = useNotes()
+  const { isAuthenticated, authLoading, createNote } = useNotes()
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
+<<<<<<< Updated upstream
   // Redirect if not authenticated
   if (!isAuthenticated) {
     router.push("/login")
     return null
+=======
+  useEffect(() => {
+    if (authLoading) return
+    if (!isAuthenticated) {
+      router.push("/login")
+    }
+  }, [authLoading, isAuthenticated, router])
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+>>>>>>> Stashed changes
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

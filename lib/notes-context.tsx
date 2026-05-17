@@ -4,19 +4,22 @@ import {
   createContext,
   useContext,
   useState,
+  useEffect,
   useCallback,
   type ReactNode,
 } from "react"
 import type { Note, User } from "@/types/note"
-import { mockNotes, mockUser, delay } from "@/lib/mock-data"
+import { supabase } from "./supabase"
+import * as notesService from "./notes"
 
 interface NotesContextType {
   // Auth state
   user: User | null
   isAuthenticated: boolean
+  authLoading: boolean
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  logout: () => void
+  logout: () => Promise<void>
 
   // Notes state
   notes: Note[]
@@ -34,67 +37,68 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
 
   const isAuthenticated = user !== null
 
-  // TODO: Replace with Supabase Auth - supabase.auth.signInWithPassword()
-  const login = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-      await delay(500) // Simulate network delay
-
-      // Mock validation
-      if (!email || !password) {
-        return { success: false, error: "Email and password are required" }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email ?? "",
+          created_at: session.user.created_at,
+        })
       }
+      setAuthLoading(false)
+    })
 
-      if (password.length < 6) {
-        return { success: false, error: "Invalid credentials" }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email ?? "",
+          created_at: session.user.created_at,
+        })
+      } else {
+        setUser(null)
+        setNotes([])
       }
+    })
 
-      // Mock successful login
-      setUser({ ...mockUser, email })
-      return { success: true }
-    },
-    []
-  )
-
-  // TODO: Replace with Supabase Auth - supabase.auth.signUp()
-  const signup = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-      await delay(500) // Simulate network delay
-
-      // Mock validation
-      if (!email || !password) {
-        return { success: false, error: "Email and password are required" }
-      }
-
-      if (password.length < 6) {
-        return { success: false, error: "Password must be at least 6 characters" }
-      }
-
-      // Mock successful signup
-      setUser({
-        id: `user-${Date.now()}`,
-        email,
-        created_at: new Date().toISOString(),
-      })
-      return { success: true }
-    },
-    []
-  )
-
-  // TODO: Replace with Supabase Auth - supabase.auth.signOut()
-  const logout = useCallback(() => {
-    setUser(null)
-    setNotes([])
+    return () => subscription.unsubscribe()
   }, [])
 
-  // TODO: Replace with Supabase query - supabase.from('notes').select('*').eq('user_id', user.id)
+  const login = useCallback(
+    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) return { success: false, error: error.message }
+      return { success: true }
+    },
+    []
+  )
+
+  const signup = useCallback(
+    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) return { success: false, error: error.message }
+      return { success: true }
+    },
+    []
+  )
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut()
+  }, [])
+
   const fetchNotes = useCallback(async () => {
     setIsLoading(true)
-    await delay(300) // Simulate network delay
-    setNotes(mockNotes)
-    setIsLoading(false)
+    try {
+      const data = await notesService.getNotes()
+      setNotes(data)
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   const getNote = useCallback(
@@ -104,51 +108,20 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     [notes]
   )
 
-  // TODO: Replace with Supabase insert - supabase.from('notes').insert()
-  const createNote = useCallback(
-    async (title: string, content: string): Promise<Note> => {
-      await delay(300) // Simulate network delay
+  const createNote = useCallback(async (title: string, content: string): Promise<Note> => {
+    const newNote = await notesService.createNote(title, content)
+    setNotes((prev) => [newNote, ...prev])
+    return newNote
+  }, [])
 
-      const newNote: Note = {
-        id: `note-${Date.now()}`,
-        title,
-        content,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        user_id: user?.id || "user-1",
-      }
+  const updateNote = useCallback(async (id: string, title: string, content: string): Promise<Note> => {
+    const updated = await notesService.updateNote(id, title, content)
+    setNotes((prev) => prev.map((note) => (note.id === id ? updated : note)))
+    return updated
+  }, [])
 
-      setNotes((prev) => [newNote, ...prev])
-      return newNote
-    },
-    [user]
-  )
-
-  // TODO: Replace with Supabase update - supabase.from('notes').update().eq('id', id)
-  const updateNote = useCallback(
-    async (id: string, title: string, content: string): Promise<Note> => {
-      await delay(300) // Simulate network delay
-
-      const updatedNote: Note = {
-        id,
-        title,
-        content,
-        created_at: notes.find((n) => n.id === id)?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        user_id: user?.id || "user-1",
-      }
-
-      setNotes((prev) =>
-        prev.map((note) => (note.id === id ? updatedNote : note))
-      )
-      return updatedNote
-    },
-    [notes, user]
-  )
-
-  // TODO: Replace with Supabase delete - supabase.from('notes').delete().eq('id', id)
   const deleteNote = useCallback(async (id: string): Promise<void> => {
-    await delay(300) // Simulate network delay
+    await notesService.deleteNote(id)
     setNotes((prev) => prev.filter((note) => note.id !== id))
   }, [])
 
@@ -157,6 +130,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isAuthenticated,
+        authLoading,
         login,
         signup,
         logout,
