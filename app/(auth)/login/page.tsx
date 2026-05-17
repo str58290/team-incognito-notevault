@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, Loader2 } from "lucide-react"
 import { useNotes } from "@/lib/notes-context"
+import { supabase } from "@/lib/supabase"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,13 +24,42 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
-    // TODO: Replace with Supabase Auth - supabase.auth.signInWithPassword()
+    if (!email || !password) {
+      setError("Please fill in all fields")
+      setIsLoading(false)
+      return
+    }
+
+    // Check if user exists in users table
+    try {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+
+      if (checkError) {
+        console.error("Error checking user:", checkError)
+      }
+
+      if (!existingUser || existingUser.length === 0) {
+        setError("Account not found. Please create a new account first.")
+        setIsLoading(false)
+        return
+      }
+    } catch (err) {
+      console.error("Error checking user:", err)
+      setError("Error checking account. Please try again.")
+      setIsLoading(false)
+      return
+    }
+
+    // User exists, proceed with login
     const result = await login(email, password)
 
     if (result.success) {
       router.push("/dashboard")
     } else {
-      setError(result.error || "An error occurred")
+      setError(result.error || "Login failed. Please try again.")
     }
 
     setIsLoading(false)
@@ -101,6 +131,16 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
+
+            {error?.includes("Account not found") && (
+              <Button
+                onClick={() => router.push("/signup")}
+                variant="outline"
+                className="w-full mt-4"
+              >
+                Create an account instead
+              </Button>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}

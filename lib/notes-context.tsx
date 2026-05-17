@@ -6,9 +6,10 @@ import {
   useState,
   useCallback,
   type ReactNode,
+  useEffect,
 } from "react"
 import type { Note, User } from "@/types/note"
-import { mockNotes, mockUser, delay } from "@/lib/mock-data"
+import { supabase } from "@/lib/supabase"
 
 interface NotesContextType {
   // Auth state
@@ -37,33 +38,104 @@ export function NotesProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = user !== null
 
-  // TODO: Replace with Supabase Auth - supabase.auth.signInWithPassword()
+  // Initialize auth state on mount
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error("Auth initialization error:", error)
+          return
+        }
+        if (data.session?.user) {
+          // Ensure user exists in users table
+          await supabase
+            .from('users')
+            .upsert({
+              id: data.session.user.id,
+              email: data.session.user.email || "",
+              created_at: new Date().toISOString(),
+            })
+
+          setUser({
+            id: data.session.user.id,
+            email: data.session.user.email || "",
+            created_at: data.session.user.created_at,
+          })
+        }
+      } catch (err) {
+        console.error("Failed to initialize auth:", err)
+      }
+    }
+    initializeAuth()
+  }, [])
+
+  // Login with Supabase Auth
   const login = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-      await delay(500) // Simulate network delay
-
-      // Mock validation
       if (!email || !password) {
         return { success: false, error: "Email and password are required" }
       }
 
-      if (password.length < 6) {
-        return { success: false, error: "Invalid credentials" }
-      }
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
 
-      // Mock successful login
-      setUser({ ...mockUser, email })
-      return { success: true }
+        if (error) {
+          console.error("Login error:", error)
+          // Map Supabase error messages to user-friendly messages
+          if (error.message?.includes("Invalid login credentials")) {
+            return { success: false, error: "Invalid login credentials. Please check your email and password." }
+          }
+          if (error.message?.includes("User not found")) {
+            return { success: false, error: "Invalid login credentials" }
+          }
+          if (error.message?.includes("Network error")) {
+            return { success: false, error: "Network error. Please check your connection and try again." }
+          }
+          return { success: false, error: error.message || "Login failed" }
+        }
+
+        if (data.user) {
+          // Ensure user exists in users table
+          const { error: upsertError } = await supabase
+            .from('users')
+            .upsert({
+              id: data.user.id,
+              email: data.user.email || "",
+              created_at: new Date().toISOString(),
+            })
+
+          if (upsertError) {
+            console.error("Error updating user in database:", upsertError)
+          }
+
+          setUser({
+            id: data.user.id,
+            email: data.user.email || "",
+            created_at: data.user.created_at,
+          })
+          return { success: true }
+        }
+
+        return { success: false, error: "Login failed" }
+      } catch (err: any) {
+        console.error("Login exception:", err)
+        const errorMessage = err?.message || err?.toString() || "An error occurred during login"
+        if (errorMessage.includes("fetch")) {
+          return { success: false, error: "Failed to connect to server. Please check your internet connection." }
+        }
+        return { success: false, error: errorMessage }
+      }
     },
     []
   )
 
-  // TODO: Replace with Supabase Auth - supabase.auth.signUp()
+  // Signup with Supabase Auth
   const signup = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-      await delay(500) // Simulate network delay
-
-      // Mock validation
       if (!email || !password) {
         return { success: false, error: "Email and password are required" }
       }
@@ -72,30 +144,101 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         return { success: false, error: "Password must be at least 6 characters" }
       }
 
-      // Mock successful signup
-      setUser({
-        id: `user-${Date.now()}`,
-        email,
-        created_at: new Date().toISOString(),
-      })
-      return { success: true }
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        })
+
+        if (error) {
+          console.error("Signup error:", error)
+          // Map Supabase error messages to user-friendly messages
+          if (error.message?.includes("already registered")) {
+            return { success: false, error: "This email is already registered. Please log in." }
+          }
+          if (error.message?.includes("User already exists")) {
+            return { success: false, error: "This email is already registered. Please log in." }
+          }
+          if (error.message?.includes("Network error")) {
+            return { success: false, error: "Network error. Please check your connection and try again." }
+          }
+          return { success: false, error: error.message || "Signup failed" }
+        }
+
+        if (data.user) {
+          // Also insert into users table
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: data.user.id,
+              email: data.user.email || "",
+              created_at: new Date().toISOString(),
+            })
+
+          if (insertError) {
+            console.error("Error inserting user into database:", insertError)
+            // Still succeed even if table insert fails - user can still login
+          }
+
+          setUser({
+            id: data.user.id,
+            email: data.user.email || "",
+            created_at: data.user.created_at,
+          })
+          return { success: true }
+        }
+
+        return { success: false, error: "Signup failed" }
+      } catch (err: any) {
+        console.error("Signup exception:", err)
+        const errorMessage = err?.message || err?.toString() || "An error occurred during signup"
+        if (errorMessage.includes("fetch")) {
+          return { success: false, error: "Failed to connect to server. Please check your internet connection." }
+        }
+        return { success: false, error: errorMessage }
+      }
     },
     []
   )
 
-  // TODO: Replace with Supabase Auth - supabase.auth.signOut()
-  const logout = useCallback(() => {
+  // Logout with Supabase Auth
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut()
     setUser(null)
     setNotes([])
   }, [])
 
-  // TODO: Replace with Supabase query - supabase.from('notes').select('*').eq('user_id', user.id)
+  // Fetch notes from Supabase
   const fetchNotes = useCallback(async () => {
+    if (!user) return
+
     setIsLoading(true)
-    await delay(300) // Simulate network delay
-    setNotes(mockNotes)
-    setIsLoading(false)
-  }, [])
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching notes:", error)
+        return
+      }
+
+      setNotes(
+        data.map((note: any) => ({
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          user_id: note.user_id,
+          created_at: note.created_at,
+          updated_at: note.updated_at,
+        }))
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user])
 
   const getNote = useCallback(
     (id: string): Note | undefined => {
@@ -104,18 +247,31 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     [notes]
   )
 
-  // TODO: Replace with Supabase insert - supabase.from('notes').insert()
+  // Create note in Supabase
   const createNote = useCallback(
     async (title: string, content: string): Promise<Note> => {
-      await delay(300) // Simulate network delay
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
 
-      const newNote: Note = {
-        id: `note-${Date.now()}`,
+      const { data, error } = await supabase.from("notes").insert({
         title,
         content,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        user_id: user?.id || "user-1",
+        user_id: user.id,
+      }).select().single()
+
+      if (error) {
+        console.error("Error creating note:", error)
+        throw error
+      }
+
+      const newNote: Note = {
+        id: data.id,
+        title: data.title,
+        content: data.content,
+        user_id: data.user_id,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       }
 
       setNotes((prev) => [newNote, ...prev])
@@ -124,18 +280,36 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     [user]
   )
 
-  // TODO: Replace with Supabase update - supabase.from('notes').update().eq('id', id)
+  // Update note in Supabase
   const updateNote = useCallback(
     async (id: string, title: string, content: string): Promise<Note> => {
-      await delay(300) // Simulate network delay
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      const { data, error } = await supabase
+        .from("notes")
+        .update({
+          title,
+          content,
+        })
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Error updating note:", error)
+        throw error
+      }
 
       const updatedNote: Note = {
-        id,
-        title,
-        content,
-        created_at: notes.find((n) => n.id === id)?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        user_id: user?.id || "user-1",
+        id: data.id,
+        title: data.title,
+        content: data.content,
+        user_id: data.user_id,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       }
 
       setNotes((prev) =>
@@ -143,14 +317,31 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       )
       return updatedNote
     },
-    [notes, user]
+    [user]
   )
 
-  // TODO: Replace with Supabase delete - supabase.from('notes').delete().eq('id', id)
-  const deleteNote = useCallback(async (id: string): Promise<void> => {
-    await delay(300) // Simulate network delay
-    setNotes((prev) => prev.filter((note) => note.id !== id))
-  }, [])
+  // Delete note from Supabase
+  const deleteNote = useCallback(
+    async (id: string): Promise<void> => {
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id)
+
+      if (error) {
+        console.error("Error deleting note:", error)
+        throw error
+      }
+
+      setNotes((prev) => prev.filter((note) => note.id !== id))
+    },
+    [user]
+  )
 
   return (
     <NotesContext.Provider

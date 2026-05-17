@@ -30,9 +30,10 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    if(0){//if (!isAuthenticated) {
+    if (!isAuthenticated) {
       router.push("/login")
       return
     }
@@ -59,7 +60,7 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
     }
   }, [isLoaded, id, getNote, router])
 
-  if(0){//if (!isAuthenticated || !isLoaded) {
+  if (!isAuthenticated || !isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -68,24 +69,34 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
   }
 
   const handleSave = async () => {
-    if (!title.trim()) return
+    if (!title.trim()) {
+      setError("Please enter a title")
+      return
+    }
 
+    setError("")
     setIsSaving(true)
 
-    // TODO: Replace with Supabase update - supabase.from('notes').update().eq('id', id)
-    await updateNote(id, title.trim(), content.trim())
-
-    setIsSaving(false)
-    router.push("/dashboard")
+    try {
+      await updateNote(id, title.trim(), content.trim())
+      router.push("/dashboard")
+    } catch (err) {
+      setError("Failed to save note. Please try again.")
+      setIsSaving(false)
+    }
   }
 
   const handleDelete = async () => {
+    setError("")
     setIsDeleting(true)
 
-    // TODO: Replace with Supabase delete - supabase.from('notes').delete().eq('id', id)
-    await deleteNote(id)
-
-    router.push("/dashboard")
+    try {
+      await deleteNote(id)
+      router.push("/dashboard")
+    } catch (err) {
+      setError("Failed to delete note. Please try again.")
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -158,6 +169,12 @@ export default function EditNotePage({ params }: { params: Promise<{ id: string 
       {/* Editor */}
       <main className="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
         <div className="space-y-6">
+          {error && (
+            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="title" className="sr-only">
               Title
