@@ -1,6 +1,7 @@
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
+import { hashLockPassword, verifyLockPassword } from '@/lib/lock-utils'
 
 function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (

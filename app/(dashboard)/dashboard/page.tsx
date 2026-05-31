@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, Plus, LogOut, Loader2 } from "lucide-react"
 import { useNotes } from "@/lib/notes-context"
+import { LockButton } from "@/components/ui/lock-button"
+import { Lock } from "lucide-react"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -90,6 +92,7 @@ export default function DashboardPage() {
                 title={note.title}
                 content={note.content}
                 updatedAt={note.updated_at}
+                lock_password={note.lock_password}
               />
             ))}
           </div>
@@ -104,12 +107,16 @@ function NoteCard({
   title,
   content,
   updatedAt,
+  lock_password,
 }: {
   id: string
   title: string
   content: string
   updatedAt: string
+  lock_password: string | null
 }) {
+  const isLocked = lock_password !== null
+
   const formattedDate = new Date(updatedAt).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -117,17 +124,38 @@ function NoteCard({
   })
 
   return (
-    <Link href={`/notes/${id}`}>
-      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg line-clamp-1">{title}</CardTitle>
+    <Card className="h-full hover:border-primary/50 transition-colors relative">
+
+      {/* Lock button — top right, stops click going to Link */}
+      <div className="absolute top-3 right-3 z-10">
+        <LockButton note={{ id, lock_password }} />
+      </div>
+
+      {/* Clicking the card opens the note — but only if unlocked */}
+      <Link href={isLocked ? "#" : `/notes/${id}`}>
+        <CardHeader className="pb-2 pr-10">
+          <div className="flex items-center gap-2">
+            {isLocked && <Lock className="w-3 h-3 text-amber-500 flex-shrink-0" />}
+            <CardTitle className="text-lg line-clamp-1">{title}</CardTitle>
+          </div>
           <CardDescription className="text-xs">{formattedDate}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground line-clamp-3">{content}</p>
+          <p className={`text-sm text-muted-foreground line-clamp-3 ${
+            isLocked ? "blur-sm select-none" : ""
+          }`}>
+            {content}
+          </p>
+          {isLocked && (
+            <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
+              <Lock className="w-3 h-3" />
+              Click the lock icon to unlock
+            </p>
+          )}
         </CardContent>
-      </Card>
-    </Link>
+      </Link>
+
+    </Card>
   )
 }
 
