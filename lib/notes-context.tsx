@@ -10,6 +10,7 @@ import {
 } from "react"
 import type { Note, User } from "@/types/note"
 import { supabase } from "@/lib/supabase"
+import { hashLockPassword, verifyLockPassword } from "@/lib/lock-utils"
 
 interface NotesContextType {
   // Auth state
@@ -27,6 +28,9 @@ interface NotesContextType {
   createNote: (title: string, content: string) => Promise<Note>
   updateNote: (id: string, title: string, content: string) => Promise<Note>
   deleteNote: (id: string) => Promise<void>
+  lockNote: (id: string, password: string) => Promise<void>
+  verifyNote: (id: string, password: string) => Promise<boolean>
+  removeLock: (id: string) => Promise<void>
 }
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined)
@@ -233,6 +237,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
           user_id: note.user_id,
           created_at: note.created_at,
           updated_at: note.updated_at,
+          lock_password: note.lock_password ?? null,
         }))
       )
     } finally {
@@ -272,6 +277,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         user_id: data.user_id,
         created_at: data.created_at,
         updated_at: data.updated_at,
+        lock_password: null,
       }
 
       setNotes((prev) => [newNote, ...prev])
@@ -310,6 +316,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         user_id: data.user_id,
         created_at: data.created_at,
         updated_at: data.updated_at,
+        lock_password: data.lock_password ?? null, // preserve existing lock, never reset it
       }
 
       setNotes((prev) =>
@@ -343,6 +350,69 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     [user]
   )
 
+  // Lock a note — hashes password and saves to lock_password column
+  const lockNote = useCallback(
+    async (id: string, password: string): Promise<void> => {
+      if (!user) throw new Error("User not authenticated")
+
+      const hashedPassword = await hashLockPassword(password)
+
+      const { error } = await supabase
+        .from("notes")
+        .update({ lock_password: hashedPassword })
+        .eq("id", id)
+        .eq("user_id", user.id)
+
+      if (error) throw error
+
+      // Update local state so UI reflects lock immediately
+      setNotes((prev) =>
+        prev.map((note) =>
+          note.id === id ? { ...note, lock_password: hashedPassword } : note
+        )
+      )
+    },
+    [user]
+  )
+
+  // Verify password — returns true/false, does NOT change DB
+  const verifyNote = useCallback(
+    async (id: string, password: string): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("lock_password")
+        .eq("id", id)
+        .single()
+
+      if (error || !data?.lock_password) return false
+      return verifyLockPassword(password, data.lock_password)
+    },
+    []
+  )
+
+  // Remove lock — sets lock_password back to null
+  const removeLock = useCallback(
+    async (id: string): Promise<void> => {
+      if (!user) throw new Error("User not authenticated")
+
+      const { error } = await supabase
+        .from("notes")
+        .update({ lock_password: null })
+        .eq("id", id)
+        .eq("user_id", user.id)
+
+      if (error) throw error
+
+      // Update local state so UI reflects unlock immediately
+      setNotes((prev) =>
+        prev.map((note) =>
+          note.id === id ? { ...note, lock_password: null } : note
+        )
+      )
+    },
+    [user]
+  )
+
   return (
     <NotesContext.Provider
       value={{
@@ -358,6 +428,9 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         createNote,
         updateNote,
         deleteNote,
+        lockNote,
+        verifyNote,
+        removeLock,
       }}
     >
       {children}

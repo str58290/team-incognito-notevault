@@ -5,6 +5,7 @@ export interface Note {
   created_at: string
   updated_at: string
   user_id: string
+  lock_password: string | null
 }
 
 export interface User {
